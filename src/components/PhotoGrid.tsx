@@ -4,11 +4,6 @@ import { useState, useEffect } from "react";
 import { PhotoTile } from "./PhotoTile";
 import { getPhotosFromAirtable } from "../utils/airtable";
 
-interface AirtablePhoto {
-  id: string;
-  url: string;
-}
-
 export const PhotoGrid = () => {
   const [photos, setPhotos] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,7 +28,7 @@ export const PhotoGrid = () => {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4 p-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-4 p-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
       {photos.map((photo) => (
         <PhotoTile key={photo?.fields?.id} imageUrl={photo?.fields?.image} />
       ))}

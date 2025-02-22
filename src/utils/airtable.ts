@@ -11,6 +11,7 @@ export async function uploadImageToAirtable(file: File) {
     const record = {
       fields: {
         image: cloudinaryUrl,
+        layout: "1x1", // Default layout
       },
     };
 
@@ -78,5 +79,39 @@ export async function getPhotosFromAirtable() {
   } catch (error) {
     console.error("Error fetching photos from Airtable:", error);
     return [];
+  }
+}
+
+export async function updatePhotoLayout(recordId: string, layout: string) {
+  try {
+    const response = await fetch(
+      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/${recordId}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fields: {
+            layout: layout,
+          },
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Airtable error details:", errorData);
+      throw new Error(
+        `Failed to update layout in Airtable: ${response.status}`,
+      );
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error updating layout in Airtable:", error);
+    throw error;
   }
 }
