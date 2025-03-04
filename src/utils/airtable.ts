@@ -1,20 +1,12 @@
 const AIRTABLE_API_KEY = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID;
-const AIRTABLE_TABLE_NAME = "gallery";
+const AIRTABLE_TABLE_NAME = 'gallery';
 
 export interface GalleryPhoto {
   id: string;
   image: string;
+  cropped_img?: string;
   layout: string;
-  cropData: CropData;
-}
-
-export interface CropData {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  unit: "px" | "%";
 }
 
 export async function uploadImageToAirtable(file: File) {
@@ -26,8 +18,7 @@ export async function uploadImageToAirtable(file: File) {
     const record = {
       fields: {
         image: cloudinaryUrl,
-        layout: "1x1", // Default layout
-        cropData: null, // Initialize with no crop
+        layout: '1x1', // Default layout
       },
     };
 
@@ -35,10 +26,10 @@ export async function uploadImageToAirtable(file: File) {
     const response = await fetch(
       `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`,
       {
-        method: "POST",
+        method: 'POST',
         headers: {
           Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify(record),
       },
@@ -46,33 +37,54 @@ export async function uploadImageToAirtable(file: File) {
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Airtable error details:", errorData);
+      console.error('Airtable error details:', errorData);
       throw new Error(`Failed to upload to Airtable: ${response.status}`);
     }
 
     const data = await response.json();
     return data;
   } catch (error) {
-    console.error("Error uploading to Airtable:", error);
+    console.error('Error uploading to Airtable:', error);
     throw error;
   }
 }
 
 async function uploadToCloudinary(file: File): Promise<string> {
   const formData = new FormData();
-  formData.append("file", file);
+  formData.append('file', file);
 
-  const response = await fetch("/api/upload", {
-    method: "POST",
+  const response = await fetch('/api/upload', {
+    method: 'POST',
     body: formData,
   });
 
   if (!response.ok) {
-    throw new Error("Failed to upload image to Cloudinary");
+    throw new Error('Failed to upload image to Cloudinary');
   }
 
   const data = await response.json();
   return data.url;
+}
+
+async function deletePhotoFromCloudinary(url: string) {
+  const assetId = url.split('/').pop()?.split('.')[0];
+  if (!assetId) {
+    throw new Error('Invalid Cloudinary URL');
+  }
+  const formData = new FormData();
+  formData.append('asset_id', assetId);
+
+  const response = await fetch('/api/delete-image', {
+    method: 'DELETE',
+    body: JSON.stringify({ imageUrl: url }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to delete image from Cloudinary');
+  }
+
+  const data = await response.json();
+  return data;
 }
 
 export async function getPhotosFromAirtable(): Promise<GalleryPhoto[]> {
@@ -87,7 +99,7 @@ export async function getPhotosFromAirtable(): Promise<GalleryPhoto[]> {
     );
 
     if (!records.ok) {
-      throw new Error("Failed to fetch photos from Airtable");
+      throw new Error('Failed to fetch photos from Airtable');
     }
 
     const data = await records.json();
@@ -96,12 +108,9 @@ export async function getPhotosFromAirtable(): Promise<GalleryPhoto[]> {
     }
     return data.records.map((record: any) => ({
       ...record.fields,
-      cropData: record?.fields?.cropData
-        ? JSON.parse(record.fields.cropData)
-        : null,
     }));
   } catch (error) {
-    console.error("Error fetching photos from Airtable:", error);
+    console.error('Error fetching photos from Airtable:', error);
     return [];
   }
 }
@@ -111,10 +120,10 @@ export async function updatePhotoLayout(recordId: string, layout: string) {
     const response = await fetch(
       `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/${recordId}`,
       {
-        method: "PATCH",
+        method: 'PATCH',
         headers: {
           Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           fields: {
@@ -126,33 +135,42 @@ export async function updatePhotoLayout(recordId: string, layout: string) {
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Airtable error details:", errorData);
-      throw new Error(
-        `Failed to update layout in Airtable: ${response.status}`,
-      );
+      console.error('Airtable error details:', errorData);
+      throw new Error(`Failed to update layout in Airtable: ${response.status}`);
     }
 
     const data = await response.json();
     return data;
   } catch (error) {
-    console.error("Error updating layout in Airtable:", error);
+    console.error('Error updating layout in Airtable:', error);
     throw error;
   }
 }
 
-export async function updatePhotoCrop(recordId: string, cropData: CropData) {
+export async function uploadAndUpdatePhotoCrop(record: GalleryPhoto, croppedImageFile: File) {
   try {
+    if (record.cropped_img) {
+      const res = await deletePhotoFromCloudinary(record.cropped_img);
+      if (!res.ok) {
+        console.error('Error deleting photo from Cloudinary:', res);
+        // throw new Error('Failed to delete photo from Cloudinary');
+      }
+    }
+    // First upload the cropped image to Cloudinary
+    const croppedImageUrl = await uploadToCloudinary(croppedImageFile);
+
+    // Then update the record in Airtable with the new URL
     const response = await fetch(
-      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/${recordId}`,
+      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/${record.id}`,
       {
-        method: "PATCH",
+        method: 'PATCH',
         headers: {
           Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           fields: {
-            cropData: JSON.stringify(cropData),
+            cropped_img: croppedImageUrl,
           },
         }),
       },
@@ -160,16 +178,14 @@ export async function updatePhotoCrop(recordId: string, cropData: CropData) {
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Airtable error details:", errorData);
-      throw new Error(
-        `Failed to update crop data in Airtable: ${response.status}`,
-      );
+      console.error('Airtable error details:', errorData);
+      throw new Error(`Failed to update crop data in Airtable: ${response.status}`);
     }
 
     const data = await response.json();
     return data;
   } catch (error) {
-    console.error("Error updating crop data in Airtable:", error);
+    console.error('Error updating crop data in Airtable:', error);
     throw error;
   }
 }
